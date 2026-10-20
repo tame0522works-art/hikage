@@ -8,6 +8,8 @@ import type { Limits, View } from './map/view.ts'
 import { buildScene } from './shadow.ts'
 import { sunPosition } from './sun.ts'
 import { formatMinutes, jstDate, toJst } from './time.ts'
+import { buildingAt, dayLight } from './timeline.ts'
+import DayBar from './ui/DayBar.tsx'
 
 const city = data as CityData
 const scene = buildScene(city.buildings)
@@ -50,6 +52,11 @@ export default function App() {
   const sun = useMemo(() => sunPosition(jstDate(date, minutes), city.origin.lat, city.origin.lon), [date, minutes])
   const shadows = useMemo(() => (sun.altitude > 0 ? shadowPaths(scene, sun, CHUNK) : null), [sun])
 
+  /** 押した地点（平面座標 m） */
+  const [picked, setPicked] = useState<[number, number] | null>(null)
+  const inBuilding = useMemo(() => (picked ? buildingAt(city.buildings, picked[0] * 100, picked[1] * 100) : null), [picked])
+  const day = useMemo(() => (picked && !inBuilding ? dayLight(scene, city.origin, date, picked[0] * 100, picked[1] * 100, STEP) : null), [picked, inBuilding, date])
+
   return (
     <div className="app">
       <header className="bar">
@@ -57,13 +64,27 @@ export default function App() {
         <p className="lead">東京駅・丸の内の建物の影</p>
       </header>
       <main className="stage">
-        <MapView origin={city.origin} limits={LIMITS} initial={INITIAL} buildings={buildingsPath} shadows={shadows} />
+        <MapView origin={city.origin} limits={LIMITS} initial={INITIAL} buildings={buildingsPath} shadows={shadows} marker={picked} onPick={(x, y) => setPicked([x, y])} />
       </main>
       <section className="controls" aria-label="日時">
         <label className="date">
           日付
           <input type="date" value={date} min="2000-01-01" max="2099-12-31" onChange={(e) => e.target.value && setDate(e.target.value)} />
         </label>
+        <div className="pick">
+          {day ? (
+            <DayBar day={day} minutes={minutes} onSeek={setMinutes} onClose={() => setPicked(null)} />
+          ) : inBuilding ? (
+            <p className="hint">
+              {inBuilding.name ?? '建物'}の中です。屋外の地点を押すと、その日の日向と日陰が出ます。
+              <button type="button" className="day-close" onClick={() => setPicked(null)} aria-label="地点の表示を閉じる">
+                ×
+              </button>
+            </p>
+          ) : (
+            <p className="hint">地図を押すと、その地点のこの日の日向と日陰が出ます。</p>
+          )}
+        </div>
         <label className="time">
           <span className="clock">{formatMinutes(minutes)}</span>
           <input type="range" min={0} max={24 * 60 - STEP} step={STEP} value={minutes} onChange={(e) => setMinutes(Number(e.target.value))} aria-label="時刻" />

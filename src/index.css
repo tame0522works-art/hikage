@@ -4,6 +4,10 @@
   --muted: #5b616b;
   --line: #d6d4cc;
   --accent: #2b3f8f;
+  --sun: #f2b84b;
+  --shade: #4a5a9a;
+  --night: #2a2e3a;
+  --marker: #d9480f;
   color-scheme: light dark;
   font-family: system-ui, 'Hiragino Sans', 'Yu Gothic UI', 'Meiryo', sans-serif;
 }
@@ -15,6 +19,7 @@
     --muted: #a3a7ae;
     --line: #34373d;
     --accent: #9fb2ff;
+    --night: #0d0f14;
   }
 }
 
@@ -82,6 +87,7 @@ body {
   grid-template-columns: auto 1fr;
   grid-template-areas:
     'date sun'
+    'pick pick'
     'time time';
   align-items: center;
   gap: 8px 16px;
@@ -137,4 +143,123 @@ body {
 
 .credit a {
   color: inherit;
+}
+
+.pick {
+  grid-area: pick;
+  min-height: 2.6em;
+}
+
+.hint {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.day-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.day-summary {
+  flex: 1;
+  margin: 0 0 6px;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.day-now {
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+.day-now.sun {
+  background: var(--sun);
+  color: #2a1d00;
+}
+
+.day-now.shade {
+  background: var(--shade);
+  color: #fff;
+}
+
+.day-now.night {
+  background: var(--night);
+  color: #fff;
+}
+
+.day-close {
+  margin-left: auto;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--fg);
+  font: inherit;
+  line-height: 1;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+
+.day-bar {
+  position: relative;
+  height: 18px;
+  border-radius: 4px;
+  overflow: hidden;
+  background: var(--night);
+  cursor: pointer;
+  touch-action: none;
+}
+
+.day-run {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+}
+
+.day-run.sun {
+  background: var(--sun);
+}
+
+.day-run.shade {
+  background: var(--shade);
+}
+
+.day-run.night {
+  background: var(--night);
+}
+
+.day-cursor {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  width: 3px;
+  margin-left: -1.5px;
+  background: var(--marker);
+  box-shadow: 0 0 0 1px #fff;
+}
+
+.day-ticks {
+  position: relative;
+  height: 1.2em;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.day-ticks span {
+  position: absolute;
+  transform: translateX(-50%);
+}
+
+.day-ticks span:first-child {
+  transform: none;
+}
+
+.day-ticks span:last-child {
+  transform: translateX(-100%);
 }

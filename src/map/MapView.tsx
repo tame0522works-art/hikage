@@ -12,17 +12,25 @@ interface Props {
   buildings: Path2D
   /** 影のパス（平面座標 cm、反時計回りの多角形を分けて入れたもの）。null なら夜（全体を暗くする） */
   shadows: Path2D[] | null
+  /** 押した地点（平面座標 m）。印を描く */
+  marker: [number, number] | null
+  /** 地図を（動かさずに）押したとき、その地点の平面座標（m）を渡す */
+  onPick: (x: number, y: number) => void
 }
+
+/** 押してから離すまでにこれより動いたら、押したのではなく動かしたとみなす（CSS px） */
+const TAP_SLOP = 6
 
 const SHADOW = 'rgb(28, 44, 120)'
 const SHADOW_ALPHA = 0.45
 const NIGHT = 'rgba(15, 20, 45, 0.55)'
 const BUILDING_FILL = '#fbf6ea'
 const BUILDING_LINE = '#6f6857'
+const MARKER = '#d9480f'
 /** 地図は影と建物の下地なので、色を抜いて薄くする（淡色地図の線路の赤や黄色が影より目立たないように） */
 const TILE_FILTER = 'grayscale(1) brightness(1.06) contrast(0.75)'
 
-export default function MapView({ origin, limits, initial, buildings, shadows }: Props) {
+export default function MapView({ origin, limits, initial, buildings, shadows, marker, onPick }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const viewRef = useRef<View>(initial)
   const sizeRef = useRef<Size>({ width: 0, height: 0 })
@@ -32,6 +40,8 @@ export default function MapView({ origin, limits, initial, buildings, shadows }:
   const layerRef = useRef<HTMLCanvasElement | null>(null)
   const limitsRef = useRef(limits)
   limitsRef.current = limits
+  const onPickRef = useRef(onPick)
+  onPickRef.current = onPick
   const project = useMemo(() => projector(origin), [origin])
   const unproject = useMemo(() => unprojector(origin), [origin])
 
@@ -102,6 +112,17 @@ export default function MapView({ origin, limits, initial, buildings, shadows }:
       ctx.fillStyle = NIGHT
       ctx.fillRect(0, 0, canvas.width, canvas.height)
     }
+    if (marker) {
+      const [mx, my] = toScreen(v, sizeRef.current, marker[0], marker[1])
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+      ctx.beginPath()
+      ctx.arc(mx, my, 7, 0, Math.PI * 2)
+      ctx.fillStyle = MARKER
+      ctx.fill()
+      ctx.lineWidth = 2.5
+      ctx.strokeStyle = '#fff'
+      ctx.stroke()
+    }
   }
 
   function tile(z: number, x: number, y: number): HTMLImageElement {
@@ -151,18 +172,27 @@ export default function MapView({ origin, limits, initial, buildings, shadows }:
     ro.observe(canvas)
 
     const pointers = new Map<number, { x: number; y: number }>()
+    // 1本指で押して、ほとんど動かさずに離したら「地点を押した」
+    let tap: { id: number; x: number; y: number } | null = null
     const local = (e: PointerEvent | WheelEvent) => {
       const r = canvas.getBoundingClientRect()
       return { x: e.clientX - r.left, y: e.clientY - r.top }
     }
     const onDown = (e: PointerEvent) => {
-      canvas.setPointerCapture(e.pointerId)
-      pointers.set(e.pointerId, local(e))
+      try {
+        canvas.setPointerCapture(e.pointerId)
+      } catch {
+        // すでに離されたポインターなどでは捕まえられない。捕まえられなくても操作は続ける
+      }
+      const p = local(e)
+      pointers.set(e.pointerId, p)
+      tap = pointers.size === 1 ? { id: e.pointerId, ...p } : null
     }
     const onMove = (e: PointerEvent) => {
       const prev = pointers.get(e.pointerId)
       if (!prev) return
       const p = local(e)
+      if (tap && Math.hypot(p.x - tap.x, p.y - tap.y) > TAP_SLOP) tap = null
       if (pointers.size === 1) {
         viewRef.current = panBy(viewRef.current, p.x - prev.x, p.y - prev.y, limitsRef.current)
       } else if (pointers.size === 2) {
@@ -179,7 +209,11 @@ export default function MapView({ origin, limits, initial, buildings, shadows }:
       pointers.set(e.pointerId, p)
       requestDraw()
     }
-    const onUp = (e: PointerEvent) => pointers.delete(e.pointerId)
+    const onUp = (e: PointerEvent) => {
+      pointers.delete(e.pointerId)
+      if (e.type === 'pointerup' && tap?.id === e.pointerId) onPickRef.current(...toLocal(viewRef.current, sizeRef.current, tap.x, tap.y))
+      tap = null
+    }
     const onWheel = (e: WheelEvent) => {
       e.preventDefault()
       const p = local(e)
