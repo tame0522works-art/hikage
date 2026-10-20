@@ -75,6 +75,15 @@ class Ui {
     await this.drawn()
   }
 
+  /** キーを1回押す。key は KeyboardEvent.key、code は物理キー、vk は Windows の仮想キーコード */
+  async press(key: string, code: string, vk: number, shift = false) {
+    const base = { key, code, windowsVirtualKeyCode: vk, modifiers: shift ? 8 : 0 }
+    await this.page.send('Input.dispatchKeyEvent', { type: 'rawKeyDown', ...base })
+    if (key.length === 1) await this.page.send('Input.dispatchKeyEvent', { type: 'char', text: key, ...base })
+    await this.page.send('Input.dispatchKeyEvent', { type: 'keyUp', ...base })
+    await this.drawn()
+  }
+
   async tap(x: number, y: number) {
     await this.page.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] })
     await this.page.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
@@ -142,13 +151,13 @@ const scenarios: Scenario[] = [
       await ui.open()
       await ui.setTime('2026-06-21', 12 * 60)
       const summer = await ui.shadowRatio()
-      assert.match(await ui.text('.sun'), /高度 77\.\d°/)
+      assert.match(await ui.text('.sun-info'), /高度 77\.\d°/)
       await ui.setTime('2026-12-22', 9 * 60)
       const winter = await ui.shadowRatio()
-      assert.match(await ui.text('.sun'), /高度 19\.\d°/)
+      assert.match(await ui.text('.sun-info'), /高度 19\.\d°/)
       assert.ok(winter > summer * 2, `冬至 9時 ${winter.toFixed(3)}、夏至 12時 ${summer.toFixed(3)}`)
       await ui.setTime('2026-12-22', 23 * 60)
-      assert.match(await ui.text('.sun'), /夜/)
+      assert.match(await ui.text('.sun-info'), /夜/)
       assert.equal(await ui.shadowRatio(), 0, '夜は影を描かない（全体を暗くする）')
     },
   },
@@ -164,6 +173,11 @@ const scenarios: Scenario[] = [
       assert.match(await ui.text('.day-summary'), /日向 50分/)
       await ui.setTime('2026-06-21', 12 * 60)
       assert.match(await ui.text('.day-summary'), /日向 13時間25分（5:35〜19:00）/)
+      // 「12:00 は日向」の札は文字の幅だけ（太陽の欄のクラス名 .sun と重なって、横いっぱいに伸びたことがある）
+      const badge = await ui.page.run<{ badge: number; panel: number }>(`
+        return { badge: document.querySelector('.day-now').getBoundingClientRect().width, panel: document.querySelector('.pick').getBoundingClientRect().width };
+      `)
+      assert.ok(badge.badge < badge.panel / 2, `札の幅 ${badge.badge}px（欄 ${badge.panel}px）`)
       // 帯の 3/4（18:00）を押す
       const bar = await ui.page.run<{ x: number; y: number; w: number }>(`const r = document.querySelector('.day-bar').getBoundingClientRect(); return { x: r.left, y: r.top + r.height / 2, w: r.width }`)
       await ui.click(bar.x + bar.w * 0.75, bar.y)
@@ -199,6 +213,47 @@ const scenarios: Scenario[] = [
       await ui.page.send('Input.dispatchMouseEvent', { type: 'mouseWheel', x: p.x, y: p.y, deltaX: 0, deltaY: -300 })
       await ui.drawn()
       assert.notEqual(await ui.canvasHash(), h, 'ホイールで寄らない')
+    },
+  },
+  {
+    name: 'キーボード: Tab で地図を選び、矢印で動かして Enter で中央の地点を選び、帯を矢印で動かせる',
+    async run(ui) {
+      await ui.open()
+      await ui.setTime('2026-06-21', 12 * 60)
+      // ページの先頭から Tab で地図へ（地図が最初のフォーカス先）
+      await ui.press('Tab', 'Tab', 9)
+      const focus = await ui.page.run<{ map: boolean; help: string }>(`
+        const m = document.querySelector('canvas.map');
+        return { map: document.activeElement === m && m.matches(':focus-visible'), help: getComputedStyle(document.querySelector('.map-keys')).display };
+      `)
+      assert.ok(focus.map, 'Tab で地図が選ばれない')
+      assert.equal(focus.help, 'block', '操作の案内が出ない')
+      const before = await ui.canvasHash()
+      // 左へ1回（40px = 24m）: 中央は (-174, 0) m、駅前広場の屋外
+      await ui.press('ArrowLeft', 'ArrowLeft', 37)
+      assert.notEqual(await ui.canvasHash(), before, '矢印キーで地図が動かない')
+      await ui.press('Enter', 'Enter', 13)
+      assert.match(await ui.text('.day-summary'), /日向 \d+(時間|分)/)
+      // 帯へフォーカスを移して、→ で 5 分、Shift+→ で 1 時間、End で最後
+      await ui.page.run(`document.querySelector('.day-bar').focus()`)
+      await ui.press('ArrowRight', 'ArrowRight', 39)
+      assert.equal(await ui.text('.clock'), '12:05')
+      await ui.press('ArrowRight', 'ArrowRight', 39, true)
+      assert.equal(await ui.text('.clock'), '13:05')
+      await ui.press('End', 'End', 35)
+      assert.equal(await ui.text('.clock'), '23:55')
+      const aria = await ui.page.run<string | null>(`return document.querySelector('.day-bar').getAttribute('aria-valuetext')`)
+      assert.equal(aria, '23:55、夜')
+    },
+  },
+  {
+    name: 'マウスで地図を押しても、キーボード用の十字と案内は出ない',
+    async run(ui) {
+      await ui.open()
+      const p = await ui.screenOf(GYOKO)
+      await ui.click(p.x, p.y)
+      const help = await ui.page.run<string>(`return getComputedStyle(document.querySelector('.map-keys')).display`)
+      assert.equal(help, 'none')
     },
   },
   {

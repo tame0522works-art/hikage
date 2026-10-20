@@ -90,22 +90,28 @@ export default function App() {
           <span className="clock">{formatMinutes(minutes)}</span>
           <input type="range" min={0} max={24 * 60 - STEP} step={STEP} value={minutes} onChange={(e) => setMinutes(Number(e.target.value))} aria-label="時刻" />
         </label>
-        <p className="sun">{sun.altitude > 0 ? `太陽 高度 ${sun.altitude.toFixed(1)}°・方位 ${sun.azimuth.toFixed(1)}°` : '太陽は地平線の下（夜）'}</p>
+        <p className="sun-info">
+          {sun.altitude > 0 ? (
+            <>
+              {/* 狭い画面で折り返すときは、高度と方位の切れ目で折り返す */}
+              <span>太陽の高度 {sun.altitude.toFixed(1)}°</span>
+              <span>方位 {sun.azimuth.toFixed(1)}°</span>
+            </>
+          ) : (
+            '太陽は地平線の下（夜）'
+          )}
+        </p>
       </section>
       <footer className="credit">
+        出典:{' '}
         <a href="https://maps.gsi.go.jp/development/ichiran.html" target="_blank" rel="noreferrer">
           地理院タイル（淡色地図）
         </a>
-        ／{city.attribution}（
-        {city.sources.map((s, i) => (
-          <span key={s.entry}>
-            {i > 0 && '・'}
-            <a href={s.dataset} target="_blank" rel="noreferrer">
-              {s.entry.split('/').pop()}
-            </a>
-          </span>
-        ))}
-        ）
+        ／
+        {/* 使ったファイル名は README に書き、ここはデータセットの題名と加工した旨だけにする（スマホで出典が何行にもならないように） */}
+        <a href={city.sources[0].dataset} target="_blank" rel="noreferrer">
+          {city.attribution}
+        </a>
       </footer>
       <link rel="preconnect" href={TILE_ORIGIN} />
     </div>

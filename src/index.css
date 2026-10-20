@@ -4,10 +4,15 @@
   --muted: #5b616b;
   --line: #d6d4cc;
   --accent: #2b3f8f;
-  --sun: #f2b84b;
-  --shade: #4a5a9a;
-  --night: #2a2e3a;
+  /* 帯の3色は、隣り合うどの2色も明るさの比が 3 以上になるよう、明・中・暗に分ける（check:contrast） */
+  --sun: #f7c55c;
+  --shade: #5a6bb5;
+  --night: #1c1f2a;
+  /* 帯の縁。日向の黄色は明るい背景と見分けにくいので、帯の形は縁で示す */
+  --bar-edge: #5b616b;
   --marker: #d9480f;
+  --on-sun: #2a1d00;
+  --on-dark: #ffffff;
   color-scheme: light dark;
   font-family: system-ui, 'Hiragino Sans', 'Yu Gothic UI', 'Meiryo', sans-serif;
 }
@@ -19,7 +24,7 @@
     --muted: #a3a7ae;
     --line: #34373d;
     --accent: #9fb2ff;
-    --night: #0d0f14;
+    --bar-edge: #a3a7ae;
   }
 }
 
@@ -82,6 +87,32 @@ body {
   cursor: grabbing;
 }
 
+.map:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: -3px;
+}
+
+/* キーボードで地図を選んだときだけ出す操作の案内（読み上げには aria-describedby でいつも伝わる） */
+.map-keys {
+  display: none;
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: calc(100% - 24px);
+  margin: 0;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--fg);
+  font-size: 0.82rem;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.25);
+}
+
+.map:focus-visible + .map-keys {
+  display: block;
+}
+
 .controls {
   display: grid;
   grid-template-columns: auto 1fr;
@@ -107,8 +138,13 @@ body {
   padding: 4px 6px;
 }
 
-.sun {
+/* 太陽の高度・方位（帯の札の .sun と名前が重ならないよう -info を付ける） */
+.sun-info {
   grid-area: sun;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  column-gap: 0.8em;
   margin: 0;
   color: var(--muted);
   font-size: 0.9rem;
@@ -180,17 +216,17 @@ body {
 
 .day-now.sun {
   background: var(--sun);
-  color: #2a1d00;
+  color: var(--on-sun);
 }
 
 .day-now.shade {
   background: var(--shade);
-  color: #fff;
+  color: var(--on-dark);
 }
 
 .day-now.night {
   background: var(--night);
-  color: #fff;
+  color: var(--on-dark);
 }
 
 .day-close {
@@ -208,11 +244,17 @@ body {
 .day-bar {
   position: relative;
   height: 18px;
+  border: 1px solid var(--bar-edge);
   border-radius: 4px;
   overflow: hidden;
   background: var(--night);
   cursor: pointer;
   touch-action: none;
+}
+
+.day-bar:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
 }
 
 .day-run {

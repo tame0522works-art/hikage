@@ -11,7 +11,7 @@
     "preview": "vite preview",
     "fetch:plateau": "tsx tools/fetch-plateau.ts",
     "convert": "tsx tools/convert.ts",
-    "check": "npm run check:zip && npm run check:convert && npm run check:data && npm run check:sun && npm run check:shadow && npm run check:timeline",
+    "check": "npm run check:zip && npm run check:convert && npm run check:data && npm run check:sun && npm run check:shadow && npm run check:timeline && npm run check:contrast",
     "check:timeline": "tsx tools/check-timeline.ts",
     "check:shadow": "tsx tools/check-shadow.ts",
     "bench": "tsx tools/bench-shadow.ts",
@@ -21,7 +21,8 @@
     "check:convert": "tsx tools/check-convert.ts",
     "check:data": "tsx tools/check-data.ts",
     "e2e": "vite build --outDir dist-e2e --emptyOutDir && tsx tools/e2e.ts",
-    "screenshots": "tsx tools/screenshots.ts"
+    "screenshots": "tsx tools/screenshots.ts",
+    "check:contrast": "tsx tools/check-contrast.ts"
   },
   "dependencies": {
     "react": "^19.3.0",

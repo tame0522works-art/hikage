@@ -1,5 +1,5 @@
 // 押した地点の1日の日向・日陰を、0〜24 時の帯で見せる。帯を押す（なぞる）とその時刻に移る。
-import type { PointerEvent } from 'react'
+import type { KeyboardEvent, PointerEvent } from 'react'
 import { formatMinutes } from '../time.ts'
 import { formatDuration, type DayLight, type Light } from '../timeline.ts'
 
@@ -30,6 +30,24 @@ export default function DayBar({ day, minutes, onSeek, onClose }: Props) {
     const m = Math.round((((e.clientX - r.left) / r.width) * 24 * 60) / day.step) * day.step
     onSeek(Math.max(0, Math.min(24 * 60 - day.step, m)))
   }
+  // キーボードでは時刻のスライダーと同じように動かす（←→ で 5 分、Shift か PageUp/PageDown で 1 時間、Home/End で端）
+  const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    const last = 24 * 60 - day.step
+    const small = e.shiftKey ? 60 : day.step
+    const keys: Record<string, number> = {
+      ArrowLeft: minutes - small,
+      ArrowDown: minutes - small,
+      ArrowRight: minutes + small,
+      ArrowUp: minutes + small,
+      PageDown: minutes - 60,
+      PageUp: minutes + 60,
+      Home: 0,
+      End: last,
+    }
+    if (!(e.key in keys)) return
+    e.preventDefault()
+    onSeek(Math.max(0, Math.min(last, keys[e.key])))
+  }
   return (
     <section className="day" aria-label="押した地点の1日の日向と日陰">
       <div className="day-head">
@@ -55,8 +73,14 @@ export default function DayBar({ day, minutes, onSeek, onClose }: Props) {
           seek(e)
         }}
         onPointerMove={(e) => e.buttons && seek(e)}
-        role="img"
-        aria-label={`日向は ${day.sunSpans.map((s) => `${formatMinutes(s.from)}から${formatMinutes(s.to)}`).join('、') || 'なし'}`}>
+        onKeyDown={onKeyDown}
+        tabIndex={0}
+        role="slider"
+        aria-label="押した地点のこの日の日向と日陰（時刻を選ぶ）"
+        aria-valuemin={0}
+        aria-valuemax={24 * 60 - day.step}
+        aria-valuenow={minutes}
+        aria-valuetext={`${formatMinutes(minutes)}、${LABEL[now]}`}>
         {runs(day).map((r) => (
           <span key={r.from} className={`day-run ${r.light}`} style={{ left: `${(r.from / 1440) * 100}%`, width: `${((r.to - r.from) / 1440) * 100}%` }} />
         ))}

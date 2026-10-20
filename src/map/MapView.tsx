@@ -1,6 +1,6 @@
 // 地図。地理院タイル・影・建物の順に1枚の canvas に描く。
 // 影と建物は平面座標（cm）の Path2D のまま、canvas の変換行列で画面に合わせるので、動かしたときに作り直さない。
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, type KeyboardEvent } from 'react'
 import { projector, unprojector, type Origin } from '../geo.ts'
 import type { Rect } from '../shadow.ts'
 import { TILE_SIZE, tileLatLon, tileUrl, tileXY, tileZoomFor } from './tiles.ts'
@@ -34,6 +34,8 @@ const NIGHT = 'rgba(15, 20, 45, 0.55)'
 const BUILDING_FILL = '#fbf6ea'
 const BUILDING_LINE = '#6f6857'
 const MARKER = '#d9480f'
+/** キーボードで操作するとき、矢印キー1回で動かす量（CSS px）。Shift を押しながらなら4倍 */
+const KEY_STEP = 40
 /** 地図は影と建物の下地なので、色を抜いて薄くする（淡色地図の線路の赤や黄色が影より目立たないように） */
 const TILE_FILTER = 'grayscale(1) brightness(1.06) contrast(0.75)'
 
@@ -48,6 +50,8 @@ export default function MapView({ origin, limits, initial, buildings, shadows, m
   const shadowCacheRef = useRef<{ source: (rect: Rect) => Path2D[]; rect: Rect; paths: Path2D[] } | null>(null)
   const limitsRef = useRef(limits)
   limitsRef.current = limits
+  /** キーボードで地図を選んでいる間は、中央に十字を描く（Enter で選ぶ地点） */
+  const focusedRef = useRef(false)
   const onPickRef = useRef(onPick)
   onPickRef.current = onPick
   const project = useMemo(() => projector(origin), [origin])
@@ -131,6 +135,40 @@ export default function MapView({ origin, limits, initial, buildings, shadows, m
       ctx.strokeStyle = '#fff'
       ctx.stroke()
     }
+    if (focusedRef.current) {
+      // 白で縁取った濃い十字。地図・影・建物のどの色の上でも見えるように
+      const cx = width / 2
+      const cy = height / 2
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+      ctx.beginPath()
+      ctx.moveTo(cx - 14, cy)
+      ctx.lineTo(cx + 14, cy)
+      ctx.moveTo(cx, cy - 14)
+      ctx.lineTo(cx, cy + 14)
+      ctx.lineCap = 'round'
+      ctx.lineWidth = 5
+      ctx.strokeStyle = '#fff'
+      ctx.stroke()
+      ctx.lineWidth = 2
+      ctx.strokeStyle = '#1f2328'
+      ctx.stroke()
+    }
+  }
+
+  /** 矢印キーで動かし、+ と - で寄せ引きし、Enter かスペースで画面中央の地点を選ぶ */
+  function onKeyDown(e: KeyboardEvent<HTMLCanvasElement>) {
+    const step = KEY_STEP * (e.shiftKey ? 4 : 1)
+    const size = sizeRef.current
+    const l = limitsRef.current
+    const v = viewRef.current
+    const moves: Record<string, [number, number]> = { ArrowLeft: [step, 0], ArrowRight: [-step, 0], ArrowUp: [0, step], ArrowDown: [0, -step] }
+    if (e.key in moves) viewRef.current = panBy(v, ...moves[e.key], l)
+    else if (e.key === '+' || e.key === '=') viewRef.current = zoomAt(v, size, size.width / 2, size.height / 2, 1 / 1.25, l)
+    else if (e.key === '-') viewRef.current = zoomAt(v, size, size.width / 2, size.height / 2, 1.25, l)
+    else if (e.key === 'Enter' || e.key === ' ') onPickRef.current(v.cx, v.cy)
+    else return
+    e.preventDefault()
+    requestDraw()
   }
 
   /** 映す範囲にかかる影のパス。前に頼んだ範囲（余白つき）に収まっていて、影の元が同じなら使い回す */
@@ -260,5 +298,28 @@ export default function MapView({ origin, limits, initial, buildings, shadows, m
     }
   }, [])
 
-  return <canvas ref={canvasRef} className="map" aria-label="東京駅・丸の内の地図と建物の影" />
+  return (
+    <>
+      <canvas
+        ref={canvasRef}
+        className="map"
+        tabIndex={0}
+        aria-label="東京駅・丸の内の地図と建物の影"
+        aria-describedby="map-keys"
+        onKeyDown={onKeyDown}
+        onFocus={(e) => {
+          // マウスや指で押して選ばれたときは十字を出さない（キーボードで来たときだけ）
+          focusedRef.current = e.currentTarget.matches(':focus-visible')
+          requestDraw()
+        }}
+        onBlur={() => {
+          focusedRef.current = false
+          requestDraw()
+        }}
+      />
+      <p id="map-keys" className="map-keys">
+        矢印キーで地図を動かし（Shift で大きく）、+ と − で寄せ引き、Enter で中央の十字の地点を選ぶ
+      </p>
+    </>
+  )
 }
