@@ -2,6 +2,7 @@
 // 影と建物は平面座標（cm）の Path2D のまま、canvas の変換行列で画面に合わせるので、動かしたときに作り直さない。
 import { useEffect, useMemo, useRef } from 'react'
 import { projector, unprojector, type Origin } from '../geo.ts'
+import type { Rect } from '../shadow.ts'
 import { TILE_SIZE, tileLatLon, tileUrl, tileXY, tileZoomFor } from './tiles.ts'
 import { panBy, toLocal, toScreen, zoomAt, type Limits, type Size, type View } from './view.ts'
 
@@ -10,13 +11,19 @@ interface Props {
   limits: Limits
   initial: View
   buildings: Path2D
-  /** 影のパス（平面座標 cm、反時計回りの多角形を分けて入れたもの）。null なら夜（全体を暗くする） */
-  shadows: Path2D[] | null
+  /**
+   * 範囲（平面座標 cm）を渡すと、そこにかかる影のパス（反時計回りの多角形を分けて入れたもの）を返す。null なら夜（全体を暗くする）。
+   * 地図は映す範囲の周りに余白をとって頼み、動かして余白の外に出たときだけ頼み直す
+   */
+  shadows: ((rect: Rect) => Path2D[]) | null
   /** 押した地点（平面座標 m）。印を描く */
   marker: [number, number] | null
   /** 地図を（動かさずに）押したとき、その地点の平面座標（m）を渡す */
   onPick: (x: number, y: number) => void
 }
+
+/** 影を頼むとき、映す範囲の周りにとる余白（幅・高さに対する割合） */
+const SHADOW_MARGIN = 0.5
 
 /** 押してから離すまでにこれより動いたら、押したのではなく動かしたとみなす（CSS px） */
 const TAP_SLOP = 6
@@ -38,6 +45,7 @@ export default function MapView({ origin, limits, initial, buildings, shadows, m
   const drawRef = useRef<() => void>(() => {})
   const pendingRef = useRef(false)
   const layerRef = useRef<HTMLCanvasElement | null>(null)
+  const shadowCacheRef = useRef<{ source: (rect: Rect) => Path2D[]; rect: Rect; paths: Path2D[] } | null>(null)
   const limitsRef = useRef(limits)
   limitsRef.current = limits
   const onPickRef = useRef(onPick)
@@ -95,7 +103,7 @@ export default function MapView({ origin, limits, initial, buildings, shadows, m
       lc.clearRect(0, 0, layer.width, layer.height)
       lc.setTransform(ctx.getTransform())
       lc.fillStyle = SHADOW
-      for (const p of shadows) lc.fill(p, 'nonzero')
+      for (const p of shadowsInView(v)) lc.fill(p, 'nonzero')
       ctx.save()
       ctx.setTransform(1, 0, 0, 1, 0, 0)
       ctx.globalAlpha = SHADOW_ALPHA
@@ -123,6 +131,23 @@ export default function MapView({ origin, limits, initial, buildings, shadows, m
       ctx.strokeStyle = '#fff'
       ctx.stroke()
     }
+  }
+
+  /** 映す範囲にかかる影のパス。前に頼んだ範囲（余白つき）に収まっていて、影の元が同じなら使い回す */
+  function shadowsInView(v: View): Path2D[] {
+    const [ax, ay] = toLocal(v, sizeRef.current, 0, 0)
+    const [bx, by] = toLocal(v, sizeRef.current, sizeRef.current.width, sizeRef.current.height)
+    const view: Rect = [ax * 100, by * 100, bx * 100, ay * 100]
+    const cache = shadowCacheRef.current
+    if (cache && cache.source === shadows && cache.rect[0] <= view[0] && cache.rect[1] <= view[1] && cache.rect[2] >= view[2] && cache.rect[3] >= view[3]) {
+      return cache.paths
+    }
+    const mx = (view[2] - view[0]) * SHADOW_MARGIN
+    const my = (view[3] - view[1]) * SHADOW_MARGIN
+    const rect: Rect = [view[0] - mx, view[1] - my, view[2] + mx, view[3] + my]
+    const paths = shadows!(rect)
+    shadowCacheRef.current = { source: shadows!, rect, paths }
+    return paths
   }
 
   function tile(z: number, x: number, y: number): HTMLImageElement {

@@ -5,7 +5,7 @@ import MapView from './map/MapView.tsx'
 import { ringsToPath, shadowPaths } from './map/paths.ts'
 import { TILE_ORIGIN } from './map/tiles.ts'
 import type { Limits, View } from './map/view.ts'
-import { buildScene } from './shadow.ts'
+import { buildScene, type Rect } from './shadow.ts'
 import { sunPosition } from './sun.ts'
 import { formatMinutes, jstDate, toJst } from './time.ts'
 import { buildingAt, dayLight } from './timeline.ts'
@@ -50,7 +50,8 @@ export default function App() {
   const [minutes, setMinutes] = useState(start.minutes)
 
   const sun = useMemo(() => sunPosition(jstDate(date, minutes), city.origin.lat, city.origin.lon), [date, minutes])
-  const shadows = useMemo(() => (sun.altitude > 0 ? shadowPaths(scene, sun, CHUNK) : null), [sun])
+  // 影は地図が「いま映している範囲」を渡して作らせる（画面の外の屋根面は計算しない）
+  const shadows = useMemo(() => (sun.altitude > 0 ? (rect: Rect) => shadowPaths(scene, sun, CHUNK, rect) : null), [sun])
 
   /** 押した地点（平面座標 m） */
   const [picked, setPicked] = useState<[number, number] | null>(null)

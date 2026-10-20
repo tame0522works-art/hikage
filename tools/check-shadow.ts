@@ -177,6 +177,21 @@ for (const jst of ['2026-12-22T09:00:00+09:00', '2026-06-21T12:00:00+09:00', '20
     if (w > 0) shaded++
   }
 }
+// 2'. 範囲を絞って作った影（画面に映る所だけ描くとき）も、範囲の中では全体で作った影と同じ。範囲の外から伸びてくる影も含む
+{
+  const sun = sunPosition(new Date('2026-12-22T09:00:00+09:00'), lat, lon)
+  const rect: [number, number, number, number] = [-250 * M, -100 * M, 50 * M, 150 * M]
+  const part: Float64Array[] = []
+  forEachShadowRing(city, sun, (r, n) => part.push(r.slice(0, n * 2)), rect)
+  const full = rings(city, sun)
+  assert.ok(part.length < full.length / 2, `範囲を絞っても多角形が減っていない（${part.length}/${full.length}）`)
+  for (let i = 0; i < 400; i++) {
+    const x = rect[0] + rand() * (rect[2] - rect[0])
+    const y = rect[1] + rand() * (rect[3] - rect[1])
+    assert.equal(winding(part, x, y) > 0, winding(full, x, y) > 0, `範囲を絞った影が (${x}, ${y}) で違う`)
+  }
+}
+
 // 冬至の朝・夏至の正午・秋分の夕方を混ぜれば、日向も日陰も十分に出るはず
 assert.ok(shaded > samples * 0.1 && shaded < samples * 0.9, `日陰の割合 ${shaded}/${samples}`)
 

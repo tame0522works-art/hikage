@@ -69,6 +69,19 @@ export function shadowOffset(sun: SunPosition): [number, number] | null {
   return [-Math.sin(sun.azimuth * rad) * k, -Math.cos(sun.azimuth * rad) * k]
 }
 
+/** 平面の範囲 [minX, minY, maxX, maxY]（cm） */
+export type Rect = [number, number, number, number]
+
+/** 屋根面 f の影が届きうる範囲（底面の範囲と、それを最も高い点の分だけずらした範囲を包む長方形）を out に書く */
+function shadowReach(bounds: Float64Array, f: number, dx: number, dy: number, out: Float64Array) {
+  const o = f * 5
+  const z = bounds[o + 4]
+  out[0] = Math.min(bounds[o], bounds[o] + z * dx)
+  out[1] = Math.min(bounds[o + 1], bounds[o + 1] + z * dy)
+  out[2] = Math.max(bounds[o + 2], bounds[o + 2] + z * dx)
+  out[3] = Math.max(bounds[o + 3], bounds[o + 3] + z * dy)
+}
+
 /** 平面の多角形 [x0, y0, x1, y1, ...] の符号付き面積の2倍（反時計回りが正） */
 function area2(r: ArrayLike<number>, n: number): number {
   let s = 0
@@ -141,17 +154,24 @@ function convexHull(pts: Float64Array, m: number, order: Uint32Array, out: Float
  *
  * 屋根面が凸なら、柱は凸な立体で、それを平行な光で地面に写した影も凸になり、底面の点とずらした屋根の点の凸包に等しい。
  * そのときは3種類に分けず、凸包1つだけを渡す（データの屋根面の大半が凸で、多角形の数が数分の1になる）。
+ *
+ * rect（[minX, minY, maxX, maxY]、cm）を渡すと、影が届きうる範囲がそこにかからない屋根面は飛ばす（画面に映る所だけ描くため）。
  */
-export function forEachShadowRing(scene: Scene, sun: SunPosition, emit: (ring: Float64Array, n: number) => void): void {
+export function forEachShadowRing(scene: Scene, sun: SunPosition, emit: (ring: Float64Array, n: number) => void, rect?: Rect): void {
   const off = shadowOffset(sun)
   if (!off) return
   const [dx, dy] = off
-  const { coords, start, count } = scene
+  const { coords, start, count, bounds } = scene
+  const reach = new Float64Array(4)
   let buf = new Float64Array(64)
   let pts = new Float64Array(128)
   let order = new Uint32Array(64)
   const quad = new Float64Array(8)
   for (let f = 0; f < start.length; f++) {
+    if (rect) {
+      shadowReach(bounds, f, dx, dy, reach)
+      if (reach[2] < rect[0] || reach[0] > rect[2] || reach[3] < rect[1] || reach[1] > rect[3]) continue
+    }
     const s = start[f] * 3
     const n = count[f]
     if (buf.length < n * 4) buf = new Float64Array(n * 8)
@@ -273,14 +293,10 @@ export function isShaded(scene: Scene, sun: SunPosition, x: number, y: number): 
   const [dx, dy] = off
   const { coords, start, count, bounds } = scene
   const quad = new Float64Array(8)
+  const reach = new Float64Array(4)
   for (let f = 0; f < start.length; f++) {
-    const o = f * 5
-    const z = bounds[o + 4]
-    const minX = Math.min(bounds[o], bounds[o] + z * dx)
-    const maxX = Math.max(bounds[o + 2], bounds[o + 2] + z * dx)
-    const minY = Math.min(bounds[o + 1], bounds[o + 1] + z * dy)
-    const maxY = Math.max(bounds[o + 3], bounds[o + 3] + z * dy)
-    if (x < minX || x > maxX || y < minY || y > maxY) continue
+    shadowReach(bounds, f, dx, dy, reach)
+    if (x < reach[0] || x > reach[2] || y < reach[1] || y > reach[3]) continue
     const s = start[f] * 3
     const n = count[f]
     const base = new Float64Array(n * 2)
