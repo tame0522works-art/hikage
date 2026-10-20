@@ -1,0 +1,33 @@
+{
+  "name": "hikage",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "東京駅・丸の内の建物の影を、日時を指定して地図に描く",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "lint": "oxlint",
+    "preview": "vite preview",
+    "fetch:plateau": "tsx tools/fetch-plateau.ts",
+    "convert": "tsx tools/convert.ts",
+    "check": "npm run check:zip && npm run check:convert && npm run check:data",
+    "check:zip": "tsx tools/check-zip.ts",
+    "check:convert": "tsx tools/check-convert.ts",
+    "check:data": "tsx tools/check-data.ts"
+  },
+  "dependencies": {
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.2",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.2",
+    "oxlint": "^1.88.0",
+    "tsx": "^4.23.15",
+    "typescript": "~7.0.2",
+    "vite": "^8.3.4"
+  }
+}
