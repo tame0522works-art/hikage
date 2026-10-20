@@ -19,7 +19,9 @@
     "check:sun": "tsx tools/check-sun.ts",
     "check:zip": "tsx tools/check-zip.ts",
     "check:convert": "tsx tools/check-convert.ts",
-    "check:data": "tsx tools/check-data.ts"
+    "check:data": "tsx tools/check-data.ts",
+    "e2e": "vite build --outDir dist-e2e --emptyOutDir && tsx tools/e2e.ts",
+    "screenshots": "tsx tools/screenshots.ts"
   },
   "dependencies": {
     "react": "^19.3.0",

@@ -7,3 +7,6 @@ dist
 .idea
 # PLATEAU の元データ（1メッシュ 100MB 超）。npm run fetch:plateau で取り直せる
 raw
+dist-e2e
+e2e-failures
+dist-pages
