@@ -79,9 +79,68 @@ function area2(r: ArrayLike<number>, n: number): number {
   return s
 }
 
+/** 屋根面 f が真上から見て凸か（点はデータの時点で反時計回り。一直線に並ぶ点は許す） */
+function isConvex(coords: Float64Array, s: number, n: number): boolean {
+  for (let i = 0; i < n; i++) {
+    const a = s + 3 * i
+    const b = s + 3 * ((i + 1) % n)
+    const c = s + 3 * ((i + 2) % n)
+    const cross = (coords[b] - coords[a]) * (coords[c + 1] - coords[b + 1]) - (coords[b + 1] - coords[a + 1]) * (coords[c] - coords[b])
+    if (cross < 0) return false
+  }
+  return true
+}
+
+function isFlat(coords: Float64Array, s: number, n: number): boolean {
+  for (let i = 1; i < n; i++) if (coords[s + 3 * i + 2] !== coords[s + 2]) return false
+  return true
+}
+
+/**
+ * 点 pts（[x0, y0, ...] の先頭 m 個）の凸包を、反時計回りで out に書き、点の数を返す（Andrew の単調鎖）。
+ * order は並べ替えに使う作業用の配列。
+ */
+function convexHull(pts: Float64Array, m: number, order: Uint32Array, out: Float64Array): number {
+  // 1面の点は 10 個前後なので、比較関数つきの sort より挿入ソートのほうがずっと速い
+  for (let i = 0; i < m; i++) {
+    const x = pts[2 * i]
+    const y = pts[2 * i + 1]
+    let j = i - 1
+    while (j >= 0 && (pts[2 * order[j]] > x || (pts[2 * order[j]] === x && pts[2 * order[j] + 1] > y))) {
+      order[j + 1] = order[j]
+      j--
+    }
+    order[j + 1] = i
+  }
+  const sorted = order.subarray(0, m)
+  const cross = (o: number, a: number, b: number) =>
+    (out[2 * a] - out[2 * o]) * (pts[2 * b + 1] - out[2 * o + 1]) - (out[2 * a + 1] - out[2 * o + 1]) * (pts[2 * b] - out[2 * o])
+  let k = 0
+  const push = (i: number) => {
+    out[2 * k] = pts[2 * i]
+    out[2 * k + 1] = pts[2 * i + 1]
+    k++
+  }
+  // 下側の鎖、続いて上側の鎖。一直線に並ぶ点は除く
+  for (const i of sorted) {
+    while (k >= 2 && cross(k - 2, k - 1, i) <= 0) k--
+    push(i)
+  }
+  const lower = k + 1
+  for (let j = m - 2; j >= 0; j--) {
+    const i = sorted[j]
+    while (k >= lower && cross(k - 2, k - 1, i) <= 0) k--
+    push(i)
+  }
+  return k - 1
+}
+
 /**
  * 影を作る多角形を1つずつ渡す。ring は [x0, y0, x1, y1, ...]、n は点の数で、必ず反時計回り。
  * ring は使い回すので、とっておくなら写すこと。
+ *
+ * 屋根面が凸なら、柱は凸な立体で、それを平行な光で地面に写した影も凸になり、底面の点とずらした屋根の点の凸包に等しい。
+ * そのときは3種類に分けず、凸包1つだけを渡す（データの屋根面の大半が凸で、多角形の数が数分の1になる）。
  */
 export function forEachShadowRing(scene: Scene, sun: SunPosition, emit: (ring: Float64Array, n: number) => void): void {
   const off = shadowOffset(sun)
@@ -89,11 +148,63 @@ export function forEachShadowRing(scene: Scene, sun: SunPosition, emit: (ring: F
   const [dx, dy] = off
   const { coords, start, count } = scene
   let buf = new Float64Array(64)
+  let pts = new Float64Array(128)
+  let order = new Uint32Array(64)
   const quad = new Float64Array(8)
   for (let f = 0; f < start.length; f++) {
     const s = start[f] * 3
     const n = count[f]
-    if (buf.length < n * 2) buf = new Float64Array(n * 4)
+    if (buf.length < n * 4) buf = new Float64Array(n * 8)
+    if (pts.length < n * 4) {
+      pts = new Float64Array(n * 8)
+      order = new Uint32Array(n * 4)
+    }
+    if (isConvex(coords, s, n) && isFlat(coords, s, n)) {
+      // 平らな凸多角形を d だけ伸ばした形: 1周しながら、d の向きを向いた辺はずらした側、背を向けた辺は元の側を通る。
+      // 向きの変わる2つの頂点では、元の点とずらした点の両方を置く
+      const ex = coords[s + 2] * dx
+      const ey = coords[s + 2] * dy
+      let k = 0
+      for (let i = 0; i < n; i++) {
+        const p = s + 3 * ((i + n - 1) % n)
+        const a = s + 3 * i
+        const b = s + 3 * ((i + 1) % n)
+        // 反時計回りの辺 (ux, uy) の外向きの法線は (uy, -ux)
+        const front = (coords[a + 1] - coords[p + 1]) * ex - (coords[a] - coords[p]) * ey > 0
+        const nextFront = (coords[b + 1] - coords[a + 1]) * ex - (coords[b] - coords[a]) * ey > 0
+        if (!front) {
+          buf[2 * k] = coords[a]
+          buf[2 * k + 1] = coords[a + 1]
+          k++
+        }
+        if (front || nextFront) {
+          buf[2 * k] = coords[a] + ex
+          buf[2 * k + 1] = coords[a + 1] + ey
+          k++
+        }
+        if (front && !nextFront) {
+          buf[2 * k] = coords[a]
+          buf[2 * k + 1] = coords[a + 1]
+          k++
+        }
+      }
+      emit(buf, k)
+      continue
+    }
+    if (isConvex(coords, s, n)) {
+      for (let i = 0; i < n; i++) {
+        const x = coords[s + 3 * i]
+        const y = coords[s + 3 * i + 1]
+        const z = coords[s + 3 * i + 2]
+        pts[4 * i] = x
+        pts[4 * i + 1] = y
+        pts[4 * i + 2] = x + z * dx
+        pts[4 * i + 3] = y + z * dy
+      }
+      const h = convexHull(pts, 2 * n, order, buf)
+      if (h >= 3) emit(buf, h)
+      continue
+    }
     // 1. 柱の底面（データの時点で反時計回り）
     for (let i = 0; i < n; i++) {
       buf[2 * i] = coords[s + 3 * i]

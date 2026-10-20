@@ -2,7 +2,8 @@
 // 元データは2ファイルで 400MB あるが、要るのは LOD1 の底面と LOD2 の屋根面だけなので、数 MB に縮む。
 import { readFileSync, statSync, writeFileSync } from 'node:fs'
 import type { Building, CityData } from '../src/data/types.ts'
-import { parseBuildings, type Origin } from './citygml.ts'
+import type { Origin } from '../src/geo.ts'
+import { parseBuildings } from './citygml.ts'
 import type { ManifestFile } from './fetch-plateau.ts'
 
 /** 東京駅 丸の内駅舎の中央付近。平面座標の原点にするだけなので、厳密な位置である必要はない */

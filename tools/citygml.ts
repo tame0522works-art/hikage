@@ -3,11 +3,7 @@
 // （bldg:Building の中に bldg:lod1Solid がちょうど1つあり、屋根は bldg:RoofSurface の gml:Polygon）を前提に読む。
 // 前提が崩れたら黙って読み飛ばさず、件数を数えて変換の結果に出す。
 import type { Building, Ring, Roof } from '../src/data/types.ts'
-
-export interface Origin {
-  lat: number
-  lon: number
-}
+import { projector, type Origin } from '../src/geo.ts'
 
 export interface ParseStats {
   buildings: number
@@ -22,25 +18,6 @@ export interface ParseStats {
   verticalRoofFaces: number
   /** LOD1 がない、底面が見つからないなどで捨てたもの */
   skipped: { id: string; reason: string }[]
-}
-
-// GRS80 楕円体（JGD2011 の基準）
-const A = 6378137
-const F = 1 / 298.257222101
-const E2 = F * (2 - F)
-
-/**
- * 緯度経度を、原点で地表に接する平面の東向き・北向きの距離（m）にする。
- * 子午線曲率半径 M と卯酉線曲率半径 N を原点で固定する近似で、原点から 1km の点で約 2cm ずれる（check:convert で実測）。
- * 影の長さは数十 cm 単位でしか意味を持たないので、この近似で足りる。
- */
-export function projector(origin: Origin) {
-  const phi = (origin.lat * Math.PI) / 180
-  const w = Math.sqrt(1 - E2 * Math.sin(phi) ** 2)
-  const M = (A * (1 - E2)) / w ** 3
-  const N = A / w
-  const rad = Math.PI / 180
-  return (lat: number, lon: number): [number, number] => [(lon - origin.lon) * rad * N * Math.cos(phi), (lat - origin.lat) * rad * M]
 }
 
 function attr(block: string, tag: string): string | undefined {

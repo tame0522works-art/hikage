@@ -2,7 +2,8 @@
 // 低層部の上に塔がある建物（LOD1 はならした高さ、LOD2 は屋根面ごとの高さ）、中庭、measuredHeight の -9999、
 // 壊れた建物の読み飛ばし、平面座標への変換の精度。
 import assert from 'node:assert/strict'
-import { parseBuildings, projector, signedArea } from './citygml.ts'
+import { projector, unprojector } from '../src/geo.ts'
+import { parseBuildings, signedArea } from './citygml.ts'
 
 const O = { lat: 35.68, lon: 139.76 }
 const DLAT = 0.0001 // 約 11m
@@ -101,5 +102,9 @@ const w = Math.sqrt(1 - e2 * Math.sin(mu) ** 2)
 const hubeny = Math.hypot((((far.lat - O.lat) * Math.PI) / 180) * ((a * (1 - e2)) / w ** 3), (((far.lon - O.lon) * Math.PI) / 180) * (a / w) * Math.cos(mu))
 assert.ok(hubeny > 1000 && hubeny < 1200)
 assert.ok(Math.abs(Math.hypot(x, y) - hubeny) < 0.05, `平面座標の距離 ${Math.hypot(x, y)} とヒュベニ ${hubeny}`)
+
+// 平面から緯度経度への逆変換（地図タイルの位置に使う）は、もとの緯度経度に戻ること
+const [blat, blon] = unprojector(O)(x, y)
+assert.ok(Math.abs(blat - far.lat) < 1e-12 && Math.abs(blon - far.lon) < 1e-12, '逆変換で戻らない')
 
 console.log('check:convert ok')

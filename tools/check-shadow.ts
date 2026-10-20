@@ -127,7 +127,26 @@ let points = 0
   points += compareGrid(scene, sun, (x, y) => (Math.abs(x) < 0.01 || Math.abs(x - 10) < 0.01 || Math.abs(y) < 0.01 || Math.abs(y - 25) < 0.01 ? null : x > 0 && x < 10 && y > 0 && y < 25), [-5, -5, 15, 30], '片流れ')
 }
 
-// 1-e. 夜（太陽が地平線の下）はすべて日陰で、描く多角形はない
+// 1-e. L字（凹んだ）平らな屋根 10m、真南から高度 45°: 凸包にできないので3種類の多角形で塗る。
+// 西の棟（0≦x≦10, 0≦y≦30）と南の棟（10≦x≦30, 0≦y≦10）。影はそれぞれを北へ 10m 伸ばした長方形の合併
+{
+  const L = [0, 0, 30, 0, 30, 10, 10, 10, 10, 30, 0, 30].flatMap((v, i, a) => (i % 2 === 0 ? [v * M, a[i + 1] * M, 10 * M] : []))
+  const scene = buildScene([building('L', [L])])
+  const sun = { altitude: 45, azimuth: 180 }
+  const near = (v: number, ...xs: number[]) => xs.some((a) => Math.abs(v - a) < 0.01)
+  points += compareGrid(
+    scene,
+    sun,
+    (x, y) => {
+      if (near(x, 0, 10, 30) || near(y, 0, 20, 40)) return null
+      return (x > 0 && x < 10 && y > 0 && y < 40) || (x > 10 && x < 30 && y > 0 && y < 20)
+    },
+    [-5, -5, 35, 45],
+    'L字',
+  )
+}
+
+// 1-f. 夜（太陽が地平線の下）はすべて日陰で、描く多角形はない
 {
   const scene = buildScene([building('cube', [box(0, 0, 10, 10, 10)])])
   const night = { altitude: -5, azimuth: 300 }
